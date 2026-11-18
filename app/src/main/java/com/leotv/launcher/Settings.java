@@ -18,11 +18,15 @@ public class Settings {
 
     public static final String SIZE = "size";
 
+    public static final String CITY = "city";
+
     public static final String SHOW_TITLE = "show_title";
 
     public static final String SHOW_CLOCK = "show_clock";
 
     public static final String SHOW_DATE = "show_date";
+
+    public static final String SHOW_WEATHER = "show_weather";
 
     public static final String SHOW_FAVORITES = "show_favorites";
 
@@ -63,6 +67,24 @@ public class Settings {
     // largeur carte, hauteur carte, taille icône (en dp), format 16:9
 
     private static final int[][] SIZE_DP = {{220, 124, 60}, {280, 158, 84}, {340, 191, 110}};
+
+
+
+    public static final String[] CITY_NAMES = {
+
+            "Paris", "Lyon", "Marseille", "Toulouse", "Nice", "Nantes", "Strasbourg",
+
+            "Bordeaux", "Lille", "Rennes", "Bruxelles", "Genève", "Montréal"};
+
+    private static final double[][] CITY_COORDS = {
+
+            {48.8566, 2.3522}, {45.7640, 4.8357}, {43.2965, 5.3698}, {43.6047, 1.4442},
+
+            {43.7102, 7.2620}, {47.2184, -1.5536}, {48.5734, 7.7521}, {44.8378, -0.5792},
+
+            {50.6292, 3.0573}, {48.1173, -1.6778}, {50.8503, 4.3517}, {46.2044, 6.1432},
+
+            {45.5017, -73.5673}};
 
 
 
@@ -149,6 +171,30 @@ public class Settings {
     public int[] sizeDp() {
 
         return SIZE_DP[idx(SIZE, SIZE_DP.length)];
+
+    }
+
+
+
+    public String cityName() {
+
+        return CITY_NAMES[idx(CITY, CITY_NAMES.length)];
+
+    }
+
+
+
+    public double cityLat() {
+
+        return CITY_COORDS[idx(CITY, CITY_COORDS.length)][0];
+
+    }
+
+
+
+    public double cityLon() {
+
+        return CITY_COORDS[idx(CITY, CITY_COORDS.length)][1];
 
     }
 
