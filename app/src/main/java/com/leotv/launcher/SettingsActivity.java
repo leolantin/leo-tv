@@ -148,6 +148,10 @@ public class SettingsActivity extends Activity {
 
         addChoice("Date", Settings.SHOW_DATE, SHOWN);
 
+        addChoice("Météo", Settings.SHOW_WEATHER, SHOWN);
+
+        addChoice("Ville de la météo", Settings.CITY, Settings.CITY_NAMES);
+
         addChoice("Favoris", Settings.SHOW_FAVORITES, SHOWN);
 
 
@@ -367,3 +371,4 @@ public class SettingsActivity extends Activity {
     }
 
 }
+
