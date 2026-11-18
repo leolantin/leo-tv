@@ -78,8 +78,6 @@ public class MainActivity extends Activity {
 
 
 
-    private static final int BLUE = Color.parseColor("#2F7BFF");
-
     private static final int CARD = Color.parseColor("#1C2236");
 
     private static final int CARD_FOCUS = Color.parseColor("#26304D");
@@ -88,13 +86,9 @@ public class MainActivity extends Activity {
 
 
 
-    private static final int BG1_TOP = Color.parseColor("#0A0F1F");
+    // Le splash ne s'affiche qu'une fois par lancement de l'appli
 
-    private static final int BG1_BOTTOM = Color.parseColor("#1A2547");
-
-    private static final int BG2_TOP = Color.parseColor("#140A2B");
-
-    private static final int BG2_BOTTOM = Color.parseColor("#0F3A5C");
+    private static boolean splashShown = false;
 
 
 
@@ -102,9 +96,25 @@ public class MainActivity extends Activity {
 
     private Favorites favorites;
 
+    private Settings settings;
+
     private List<AppItem> apps = new ArrayList<>();
 
 
+
+    // Valeurs lues depuis les paramètres
+
+    private int accent;
+
+    private int bgTop1, bgBottom1, bgTop2, bgBottom2;
+
+    private int radius, cardW, cardH, iconSize;
+
+
+
+    private TextView titleView;
+
+    private TextView favTitle;
 
     private LinearLayout favRow;
 
@@ -118,6 +128,8 @@ public class MainActivity extends Activity {
 
     private TextView dateView;
 
+    private TextView weatherView;
+
 
 
     private GradientDrawable background;
@@ -129,6 +141,14 @@ public class MainActivity extends Activity {
     private String lastPkg = null;
 
     private boolean lastInFav = false;
+
+
+
+    private long weatherTime = 0;
+
+    private String weatherCity = "";
+
+    private String weatherText = null;
 
 
 
@@ -168,6 +188,8 @@ public class MainActivity extends Activity {
 
         favorites = new Favorites(this);
 
+        settings = new Settings(this);
+
         setContentView(buildUi());
 
     }
@@ -182,7 +204,11 @@ public class MainActivity extends Activity {
 
         apps = loadApps();
 
+        applySettings();
+
         rebuildRows();
+
+        refreshWeather();
 
         handler.removeCallbacks(clockTick);
 
@@ -208,19 +234,67 @@ public class MainActivity extends Activity {
 
 
 
+    // ---------- Paramètres ----------
+
+
+
+    private void applySettings() {
+
+        accent = settings.accentColor();
+
+        int[] bg = settings.bgColors();
+
+        bgTop1 = bg[0];
+
+        bgBottom1 = bg[1];
+
+        bgTop2 = bg[2];
+
+        bgBottom2 = bg[3];
+
+        background.setColors(new int[]{bgTop1, bgBottom1});
+
+
+
+        radius = dp(settings.radiusDp());
+
+        int[] s = settings.sizeDp();
+
+        cardW = dp(s[0]);
+
+        cardH = dp(s[1]);
+
+        iconSize = dp(s[2]);
+
+
+
+        titleView.setTextColor(accent);
+
+        titleView.setVisibility(settings.isShown(Settings.SHOW_TITLE) ? View.VISIBLE : View.GONE);
+
+        clockView.setVisibility(settings.isShown(Settings.SHOW_CLOCK) ? View.VISIBLE : View.GONE);
+
+        dateView.setVisibility(settings.isShown(Settings.SHOW_DATE) ? View.VISIBLE : View.GONE);
+
+        weatherView.setVisibility(settings.isShown(Settings.SHOW_WEATHER) ? View.VISIBLE : View.GONE);
+
+    }
+
+
+
     // ---------- Construction de l'interface ----------
 
 
 
     private View buildUi() {
 
-        FrameLayout root = new FrameLayout(this);
+        final FrameLayout root = new FrameLayout(this);
 
         background = new GradientDrawable(
 
                 GradientDrawable.Orientation.TOP_BOTTOM,
 
-                new int[]{BG1_TOP, BG1_BOTTOM});
+                new int[]{Color.BLACK, Color.BLACK});
 
         root.setBackground(background);
 
@@ -236,25 +310,23 @@ public class MainActivity extends Activity {
 
 
 
-        // En-tête : titre à gauche, horloge et date à droite
-
         FrameLayout header = new FrameLayout(this);
 
 
 
-        TextView title = new TextView(this);
+        titleView = new TextView(this);
 
-        title.setText("LEO TV");
+        titleView.setText("LEO TV");
 
-        title.setTextColor(Color.WHITE);
+        titleView.setTextColor(Color.WHITE);
 
-        title.setTextSize(34);
+        titleView.setTextSize(34);
 
-        title.setTypeface(Typeface.DEFAULT_BOLD);
+        titleView.setTypeface(Typeface.DEFAULT_BOLD);
 
-        title.setPadding(dp(16), 0, 0, 0);
+        titleView.setPadding(dp(16), 0, 0, 0);
 
-        header.addView(title, new FrameLayout.LayoutParams(
+        header.addView(titleView, new FrameLayout.LayoutParams(
 
                 WRAP, WRAP, Gravity.START | Gravity.CENTER_VERTICAL));
 
@@ -290,6 +362,18 @@ public class MainActivity extends Activity {
 
 
 
+        weatherView = new TextView(this);
+
+        weatherView.setTextColor(TEXT_SOFT);
+
+        weatherView.setTextSize(16);
+
+        weatherView.setPadding(0, dp(2), 0, 0);
+
+        clockBox.addView(weatherView);
+
+
+
         header.addView(clockBox, new FrameLayout.LayoutParams(
 
                 WRAP, WRAP, Gravity.END | Gravity.CENTER_VERTICAL));
@@ -297,8 +381,6 @@ public class MainActivity extends Activity {
         page.addView(header, new LinearLayout.LayoutParams(MATCH, WRAP));
 
 
-
-        // Contenu défilant verticalement
 
         ScrollView scroll = new ScrollView(this);
 
@@ -320,7 +402,9 @@ public class MainActivity extends Activity {
 
 
 
-        content.addView(sectionTitle("Favoris"));
+        favTitle = sectionTitle("Favoris");
+
+        content.addView(favTitle);
 
 
 
@@ -364,7 +448,59 @@ public class MainActivity extends Activity {
 
         root.addView(page, new FrameLayout.LayoutParams(MATCH, MATCH));
 
+
+
+        if (!splashShown) {
+
+            splashShown = true;
+
+            addSplash(root);
+
+        }
+
         return root;
+
+    }
+
+
+
+    private void addSplash(final FrameLayout root) {
+
+        final FrameLayout splash = new FrameLayout(this);
+
+        splash.setBackgroundColor(Color.parseColor("#0A0F1F"));
+
+
+
+        TextView logo = new TextView(this);
+
+        logo.setText("LEO TV");
+
+        logo.setTextColor(Color.WHITE);
+
+        logo.setTextSize(64);
+
+        logo.setTypeface(Typeface.DEFAULT_BOLD);
+
+        logo.setLetterSpacing(0.15f);
+
+        splash.addView(logo, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.CENTER));
+
+
+
+        root.addView(splash, new FrameLayout.LayoutParams(MATCH, MATCH));
+
+
+
+        handler.postDelayed(() -> splash.animate()
+
+                .alpha(0f)
+
+                .setDuration(600)
+
+                .withEndAction(() -> root.removeView(splash))
+
+                .start(), 1500);
 
     }
 
@@ -386,9 +522,9 @@ public class MainActivity extends Activity {
 
             float f = (Float) a.getAnimatedValue();
 
-            int top = (Integer) evaluator.evaluate(f, BG1_TOP, BG2_TOP);
+            int top = (Integer) evaluator.evaluate(f, bgTop1, bgTop2);
 
-            int bottom = (Integer) evaluator.evaluate(f, BG1_BOTTOM, BG2_BOTTOM);
+            int bottom = (Integer) evaluator.evaluate(f, bgBottom1, bgBottom2);
 
             background.setColors(new int[]{top, bottom});
 
@@ -472,7 +608,15 @@ public class MainActivity extends Activity {
 
                 if (pkg.equals(getPackageName()) || !seen.add(pkg)) continue;
 
-                list.add(new AppItem(ri.loadLabel(pm).toString(), pkg, ri.loadIcon(pm)));
+                list.add(new AppItem(
+
+                        ri.loadLabel(pm).toString(),
+
+                        pkg,
+
+                        ri.loadIcon(pm),
+
+                        ri.activityInfo.loadBanner(pm)));
 
             }
 
@@ -494,33 +638,49 @@ public class MainActivity extends Activity {
 
 
 
+        boolean showFav = settings.isShown(Settings.SHOW_FAVORITES);
+
+
+
         View toFocus = null;
 
         View firstFav = null;
 
-        View firstAll = null;
+        View firstApp = null;
 
         int favCount = 0;
 
 
 
-        for (AppItem app : apps) {
+        if (showFav) {
 
-            if (favorites.contains(app.pkg)) {
+            for (AppItem app : apps) {
 
-                View c = makeCard(app, true);
+                if (favorites.contains(app.pkg)) {
 
-                favRow.addView(c, cardParams());
+                    View c = makeCard(app, true);
 
-                favCount++;
+                    favRow.addView(c, cardParams());
 
-                if (firstFav == null) firstFav = c;
+                    favCount++;
 
-                if (lastInFav && app.pkg.equals(lastPkg)) toFocus = c;
+                    if (firstFav == null) firstFav = c;
+
+                    if (lastInFav && app.pkg.equals(lastPkg)) toFocus = c;
+
+                }
 
             }
 
         }
+
+
+
+        View settingsCard = makeSettingsCard();
+
+        allRow.addView(settingsCard, cardParams());
+
+
 
         for (AppItem app : apps) {
 
@@ -528,23 +688,91 @@ public class MainActivity extends Activity {
 
             allRow.addView(c, cardParams());
 
-            if (firstAll == null) firstAll = c;
+            if (firstApp == null) firstApp = c;
 
-            if (!lastInFav && app.pkg.equals(lastPkg)) toFocus = c;
+            if ((!lastInFav || !showFav) && app.pkg.equals(lastPkg)) toFocus = c;
 
         }
 
 
 
-        favHint.setVisibility(favCount == 0 ? View.VISIBLE : View.GONE);
+        favTitle.setVisibility(showFav ? View.VISIBLE : View.GONE);
 
-        favScroller.setVisibility(favCount == 0 ? View.GONE : View.VISIBLE);
+        favHint.setVisibility(showFav && favCount == 0 ? View.VISIBLE : View.GONE);
+
+        favScroller.setVisibility(showFav && favCount > 0 ? View.VISIBLE : View.GONE);
 
 
 
-        if (toFocus == null) toFocus = (firstFav != null) ? firstFav : firstAll;
+        if (toFocus == null) {
 
-        if (toFocus != null) toFocus.requestFocus();
+            if (firstFav != null) toFocus = firstFav;
+
+            else if (firstApp != null) toFocus = firstApp;
+
+            else toFocus = settingsCard;
+
+        }
+
+        toFocus.requestFocus();
+
+    }
+
+
+
+    // ---------- Météo ----------
+
+
+
+    private void refreshWeather() {
+
+        if (!settings.isShown(Settings.SHOW_WEATHER)) return;
+
+
+
+        final String city = settings.cityName();
+
+        long now = System.currentTimeMillis();
+
+
+
+        // Pas de nouvelle requête si la météo date de moins de 10 minutes
+
+        if (city.equals(weatherCity) && weatherText != null && now - weatherTime < 600000) {
+
+            weatherView.setText(city + "  ·  " + weatherText);
+
+            return;
+
+        }
+
+
+
+        weatherCity = city;
+
+        weatherText = null;
+
+        weatherView.setText(city);
+
+
+
+        Weather.fetch(settings.cityLat(), settings.cityLon(), text -> {
+
+            if (text == null) {
+
+                weatherView.setText(city + "  ·  météo indisponible");
+
+                return;
+
+            }
+
+            weatherText = text;
+
+            weatherTime = System.currentTimeMillis();
+
+            weatherView.setText(city + "  ·  " + text);
+
+        });
 
     }
 
@@ -556,7 +784,7 @@ public class MainActivity extends Activity {
 
     private LinearLayout.LayoutParams cardParams() {
 
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(190), dp(180));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(cardW, cardH);
 
         int m = dp(10);
 
@@ -568,7 +796,7 @@ public class MainActivity extends Activity {
 
 
 
-    private View makeCard(final AppItem app, final boolean inFavRow) {
+    private LinearLayout baseCard() {
 
         LinearLayout card = new LinearLayout(this);
 
@@ -584,21 +812,17 @@ public class MainActivity extends Activity {
 
         card.setBackground(cardBackground(false));
 
+        return card;
+
+    }
 
 
-        ImageView icon = new ImageView(this);
 
-        icon.setImageDrawable(app.icon);
-
-        card.addView(icon, new LinearLayout.LayoutParams(dp(104), dp(104)));
-
-
+    private TextView cardLabel(String text) {
 
         TextView label = new TextView(this);
 
-        boolean isFav = favorites.contains(app.pkg);
-
-        label.setText((isFav && !inFavRow ? "★ " : "") + app.label);
+        label.setText(text);
 
         label.setTextColor(Color.WHITE);
 
@@ -612,7 +836,113 @@ public class MainActivity extends Activity {
 
         label.setPadding(0, dp(10), 0, 0);
 
-        card.addView(label, new LinearLayout.LayoutParams(MATCH, WRAP));
+        return label;
+
+    }
+
+
+
+    private void addFocusEffect(LinearLayout card, final AppItem app, final boolean inFavRow) {
+
+        card.setOnFocusChangeListener((v, hasFocus) -> {
+
+            if (hasFocus && app != null) {
+
+                lastPkg = app.pkg;
+
+                lastInFav = inFavRow;
+
+            }
+
+            float scale = hasFocus ? 1.12f : 1f;
+
+            v.animate().scaleX(scale).scaleY(scale).setDuration(150).start();
+
+            v.setBackground(cardBackground(hasFocus));
+
+            v.setForeground(hasFocus ? focusRing() : null);
+
+            v.setElevation(hasFocus ? dp(12) : 0);
+
+        });
+
+    }
+
+
+
+    private View makeSettingsCard() {
+
+        LinearLayout card = baseCard();
+
+
+
+        ImageView icon = new ImageView(this);
+
+        icon.setImageResource(android.R.drawable.ic_menu_preferences);
+
+        icon.setColorFilter(Color.WHITE);
+
+        icon.setPadding(dp(10), dp(10), dp(10), dp(10));
+
+        card.addView(icon, new LinearLayout.LayoutParams(iconSize, iconSize));
+
+        card.addView(cardLabel("Paramètres"), new LinearLayout.LayoutParams(MATCH, WRAP));
+
+
+
+        card.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+
+        addFocusEffect(card, null, false);
+
+        return card;
+
+    }
+
+
+
+    private View makeCard(final AppItem app, final boolean inFavRow) {
+
+        LinearLayout card = baseCard();
+
+
+
+        if (app.banner != null) {
+
+            // Style Apple TV : l'image de l'appli remplit toute la carte
+
+            card.setPadding(0, 0, 0, 0);
+
+            card.setClipToOutline(true);
+
+
+
+            ImageView banner = new ImageView(this);
+
+            banner.setImageDrawable(app.banner);
+
+            banner.setScaleType(ImageView.ScaleType.CENTER_CROP);
+
+            card.addView(banner, new LinearLayout.LayoutParams(MATCH, MATCH));
+
+        } else {
+
+            // Pas de bannière : icône et nom
+
+            ImageView icon = new ImageView(this);
+
+            icon.setImageDrawable(app.icon);
+
+            card.addView(icon, new LinearLayout.LayoutParams(iconSize, iconSize));
+
+
+
+            boolean isFav = favorites.contains(app.pkg);
+
+            String text = (isFav && !inFavRow ? "★ " : "") + app.label;
+
+            card.addView(cardLabel(text), new LinearLayout.LayoutParams(MATCH, WRAP));
+
+        }
 
 
 
@@ -642,25 +972,7 @@ public class MainActivity extends Activity {
 
 
 
-        card.setOnFocusChangeListener((v, hasFocus) -> {
-
-            if (hasFocus) {
-
-                lastPkg = app.pkg;
-
-                lastInFav = inFavRow;
-
-            }
-
-            float scale = hasFocus ? 1.12f : 1f;
-
-            v.animate().scaleX(scale).scaleY(scale).setDuration(150).start();
-
-            v.setBackground(cardBackground(hasFocus));
-
-            v.setElevation(hasFocus ? dp(12) : 0);
-
-        });
+        addFocusEffect(card, app, inFavRow);
 
         return card;
 
@@ -674,9 +986,23 @@ public class MainActivity extends Activity {
 
         d.setColor(focused ? CARD_FOCUS : CARD);
 
-        d.setCornerRadius(dp(20));
+        d.setCornerRadius(radius);
 
-        if (focused) d.setStroke(dp(4), BLUE);
+        return d;
+
+    }
+
+
+
+    private GradientDrawable focusRing() {
+
+        GradientDrawable d = new GradientDrawable();
+
+        d.setColor(Color.TRANSPARENT);
+
+        d.setCornerRadius(radius);
+
+        d.setStroke(dp(4), accent);
 
         return d;
 
@@ -717,4 +1043,3 @@ public class MainActivity extends Activity {
     }
 
 }
-
