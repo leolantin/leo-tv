@@ -40,7 +40,25 @@ jobs:
 
 
 
-      - run: gradle assembleDebug --stacktrace
+      - name: Compiler
+
+        run: gradle assembleDebug --stacktrace > build.log 2>&1
+
+
+
+      - name: Afficher les erreurs
+
+        if: failure()
+
+        run: |
+
+          echo "### Erreurs de compilation" >> $GITHUB_STEP_SUMMARY
+
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          grep -E "error:|What went wrong" -A3 build.log | head -60 >> $GITHUB_STEP_SUMMARY || true
+
+          echo '```' >> $GITHUB_STEP_SUMMARY
 
 
 
@@ -51,4 +69,3 @@ jobs:
           name: LEO-TV-APK
 
           path: app/build/outputs/apk/debug/*.apk
-
