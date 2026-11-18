@@ -14,15 +14,19 @@ public class AppItem {
 
     public final Drawable icon;
 
+    public final Drawable banner;
 
 
-    public AppItem(String label, String pkg, Drawable icon) {
+
+    public AppItem(String label, String pkg, Drawable icon, Drawable banner) {
 
         this.label = label;
 
         this.pkg = pkg;
 
         this.icon = icon;
+
+        this.banner = banner;
 
     }
 
